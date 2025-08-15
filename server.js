@@ -1,18 +1,11 @@
 // index.js (Node.js version of the FastAPI logic)
 const { neon } = require('@neondatabase/serverless')
-const functions = require('firebase-functions');
 const express = require('express');
 const cors = require('cors');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const yahooFinance = require('yahoo-finance2').default;
-const Parser = require('rss-parser');
-const parser = new Parser();
 const nodemailer = require('nodemailer');
-const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
-const config = require('firebase-functions').config();
-const pkg = require('pg')
-const { Pool } = pkg
 
 
 require('dotenv').config()
@@ -27,17 +20,6 @@ app.use(express.json());
 
 // DB connection
 const sql = neon(process.env.DATABASE_URL)
-
-app.get("/test", async (req, res) => {
-  try {
-    const result = await sql`SELECT NOW()`;
-    res.json({ connected: true, time: result[0].now });
-    console.log(result)
-  } catch (err) {
-    console.error("❌ Database connection error:", err.message);
-    res.status(500).json({ connected: false, error: err.message });
-  }
-});
 
 app.post("/register", async (req, res) => {
   try {
@@ -532,7 +514,7 @@ app.post('/send-email', async (req, res) => {
       subject: `Vinvest Customer: ${from}`,
       text: message
     }, (err, info) => {
-      if (err) throw err;
+      console.error(err)
     });
     res.status(200).json({ message: 'Email Sent successfully' });
   } catch (error) {
@@ -623,11 +605,3 @@ app.post("/logout", async (req, res) => {
     return res.status(500).json({ error: "Database error during logout" });
   }
 });
-
-
-app.listen(PORT, () => {
-  console.log(`Node server running on http://localhost:${PORT}`);
-});
-
-
-// // exports.api = functions.https.onRequest(app)
