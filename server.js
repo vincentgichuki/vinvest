@@ -1,0 +1,633 @@
+// index.js (Node.js version of the FastAPI logic)
+const { neon } = require('@neondatabase/serverless')
+const functions = require('firebase-functions');
+const express = require('express');
+const cors = require('cors');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const yahooFinance = require('yahoo-finance2').default;
+const Parser = require('rss-parser');
+const parser = new Parser();
+const nodemailer = require('nodemailer');
+const mysql = require('mysql2');
+const bcrypt = require('bcrypt');
+const config = require('firebase-functions').config();
+const pkg = require('pg')
+const { Pool } = pkg
+
+
+require('dotenv').config()
+const app = express();
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
+const PORT = process.env.PORT
+
+app.use(cors({ origin: ['http://localhost:5173', 'https://ai-store-29ac6.web.app'] }));
+app.use(express.json());
+
+// DB connection
+const sql = neon(process.env.DATABASE_URL)
+
+app.get("/test", async (req, res) => {
+  try {
+    const result = await sql`SELECT NOW()`;
+    res.json({ connected: true, time: result[0].now });
+    console.log(result)
+  } catch (err) {
+    console.error("❌ Database connection error:", err.message);
+    res.status(500).json({ connected: false, error: err.message });
+  }
+});
+
+app.post("/register", async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Check if user already exists
+    const existing = await sql`
+      SELECT * FROM users WHERE email = ${email}
+    `;
+
+    if (existing.length > 0) {
+      return res.status(400).json({ error: "User already exists" });
+    }
+
+    // Insert new user
+    await sql`
+      INSERT INTO users (username, email, password)
+      VALUES (${username}, ${email}, ${hashedPassword})
+    `;
+
+    res.status(201).json({ message: "✅ Registered successfully" });
+
+  } catch (err) {
+    console.error("❌ Register error:", err.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.post("/login", async (req, res) => {
+  try {
+    const { loginEmail, loginPassword } = req.body;
+
+    // Fetch user by email
+    const result = await sql`
+      SELECT * FROM users WHERE email = ${loginEmail}
+    `;
+
+    if (result.length === 0) {
+      return res.status(400).json({ message: "Invalid email or password" });
+    }
+
+    const user = result[0];
+
+    // Compare password
+    const isPasswordValid = await bcrypt.compare(loginPassword, user.password);
+    if (!isPasswordValid) {
+      return res.status(400).json({ message: "Invalid email or password" });
+    }
+
+    res.status(200).json({ message: "✅ Login successful", user: { id: user.id, username: user.username, email: user.email } });
+    console.log("✅ Login successful", { id: user.id, username: user.username, email: user.email })
+  } catch (err) {
+    console.error("❌ Login error:", err.message);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+
+app.post("/username", async (req, res) => {
+  try {
+    const { user } = req.body; // user = email
+    const result = await sql`
+      SELECT username FROM users WHERE email = ${user}
+    `;
+
+    if (result.length === 0) {
+      console.log('User not found')
+      return res.status(404).json({ message: "User not found" });
+    }
+    return res.json({ username: result[0].username });
+  } catch (err) {
+    console.error("❌ Error fetching username:", err.message);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+
+//Add digital products
+app.post("/add_stock", async (req, res) => {
+  try {
+    const data = req.body;
+    // Count how many stocks this user already has
+    const stocks = await sql`
+      SELECT * FROM stocks WHERE "user" = ${data.user}
+    `;
+    // If user already has 10 stocks, check if they are subscribed
+    if (stocks.length === 10) {
+      const subscriptions = await sql`
+        SELECT * FROM subscriptions WHERE "user" = ${data.user}
+      `;
+
+      if (subscriptions.length === 0) {
+        return res.json({ error: "You have to subscribe in order to add more stocks" });
+      }
+    }
+
+    // Check if the stock already exists for this user
+    const existingStock = await sql`
+      SELECT shares FROM stocks WHERE "Symbol" = ${data.symbol} AND "user" = ${data.user}
+    `;
+
+    if (existingStock.length > 0) {
+      // Update shares if stock exists
+      await sql`
+        UPDATE stocks
+        SET shares = shares + ${data.shares}
+        WHERE "Symbol" = ${data.symbol} AND "user" = ${data.user}
+      `;
+      return res.status(200).json({ message: "Shares updated successfully" });
+    } else {
+      // Insert new stock if it doesn't exist
+      await sql`
+        INSERT INTO stocks ("Name", "Symbol", "Type", shares, "buyPrice", "user")
+        VALUES (${data.name}, ${data.symbol}, ${data.sector}, ${data.shares}, ${data.buyPrice}, ${data.user})
+      `;
+      return res.status(200).json({ message: "Added stock successfully" });
+    }
+  } catch (err) {
+    console.error("❌ Error in /add_stock:", err.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.post("/stocks", async (req, res) => {
+  try {
+    const data = req.body;
+
+    // Fetch all stocks for this user
+    const results = await sql`
+      SELECT * FROM stocks WHERE "user" = ${data.user}
+    `;
+
+    const stock = [];
+    let totalPortfolioValue = 0;
+    let totalProfitLoss = 0
+
+    for (let i = 0; i < results.length; i++) {
+      const quoteData = await yahooFinance.quote(results[i].Symbol);
+
+      const symbol = quoteData.symbol;
+      const currentPrice = quoteData.regularMarketPrice;
+      const currency = quoteData.currency;
+      const priceChange = quoteData.regularMarketChangePercent;
+      const name = quoteData.shortName;
+      const type = quoteData.quoteType;
+      const totalValue = currentPrice * results[i].shares;
+      const profitLoss = (currentPrice - results[i].buyPrice) * results[i].shares
+      totalPortfolioValue += totalValue;
+      totalProfitLoss += profitLoss;
+
+      // ✅ fallback: manually calculate period1 & period2
+      const period2 = new Date(); // today
+      const period1 = new Date();
+      period1.setDate(period1.getDate() - 7); // 7 days ago
+
+      const chart = await yahooFinance.chart(symbol, {
+        period1,
+        period2,       // last 7 days
+        interval: "1d",    // daily candles
+      });
+
+      const sparkline = chart.quotes.map((q) => q.close)
+
+      stock.push({
+        name: name,
+        type: type,
+        symbol: symbol,
+        shares: results[i].shares,
+        buyPrice: results[i].buyPrice, // ⚠️ Postgres column names are usually lowercase unless quoted
+        currentPrice: currentPrice,
+        totalValue: (currentPrice * results[i].shares).toFixed(2),
+        profitLoss: ((currentPrice - results[i].buyPrice) * results[i].shares).toFixed(2),
+        currency: currency,
+        priceChange: priceChange,
+        sparkline: sparkline,
+      });
+    }
+
+    console.log(stock)
+    res.status(200).json({ results: stock, totalPortfolioValue: totalPortfolioValue.toFixed(2), totalProfitLoss: totalProfitLoss.toFixed(2) });
+  } catch (err) {
+    console.error("❌ Error in /stocks:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+
+//Update Shares
+app.post("/update-shares", async (req, res) => {
+  try {
+    const { shares, symbol, user } = req.body;
+
+    const result = await sql`
+      UPDATE stocks
+      SET "shares" = ${shares}
+      WHERE "Symbol" = ${symbol} AND "user" = ${user}
+      RETURNING *
+    `;
+
+    console.log(result)
+
+
+    res.json({ message: `Updated ${symbol}'s shares successfully!` });
+  } catch (err) {
+    console.error("❌ Error updating shares:", err.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+
+// //Update buy price
+app.post("/update-buyprice", async (req, res) => {
+  try {
+    const { buyPrice, symbol, user } = req.body;
+
+    await sql`
+      UPDATE stocks
+      SET "buyPrice" = ${buyPrice}
+      WHERE "Symbol" = ${symbol} AND "user" = ${user}
+    `;
+
+    res.json({ message: `Updated ${symbol}'s buy price successfully!` });
+  } catch (err) {
+    console.error("❌ Error updating buy price:", err.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+//Delete stock
+app.post("/delete-stock", async (req, res) => {
+  try {
+    const { symbol, user } = req.body;
+
+    await sql`
+      DELETE FROM stocks
+      WHERE "Symbol" = ${symbol} AND "user" = ${user}
+    `;
+
+    res.json({ message: `Deleted ${symbol} successfully!` });
+  } catch (err) {
+    console.error("❌ Error deleting stock:", err.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+//Search Digital
+app.get('/search', async (req, res) => {
+  const { query } = req.query;
+  if (!query) return res.json(400).json({ message: 'Query is required.' });
+  try {
+    const results = await yahooFinance.search(query);
+    const formatted = results.quotes.map(item => ({
+      symbol: item.symbol,
+      name: item.shortname,
+      type: item.quoteType
+    }));
+    res.json(formatted);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+
+//AI function
+async function AI(prompt) {
+  try {
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'models/gemini-1.5-flash-002' });
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (error) {
+    return error.message;
+  }
+}
+
+// Ai api
+app.post('/chat', async (req, res) => {
+  const { text } = req.body;
+
+  function getBotResponse(input) {
+    const lower = input.toLowerCase();
+    if (lower.includes('hello') || lower.includes('hi')) return 'Hi there! I\'m Amani.';
+    if (lower.includes('how are you')) return 'I\'m fine. How can I help you today?';
+    if (lower.includes('news')) return 'Let me refer you to my fellow agent Millie who would inform you on the latest news and trends and keep you updated. She is available 24/7.';
+    return null;
+  }
+
+  const botResponse = getBotResponse(text);
+  if (botResponse) return res.json({ response: botResponse });
+
+  try {
+    const result = await AI(text);
+    return res.json({ response: result });
+  } catch (e) {
+    return res.json({ response: 'Failed to get AI response' });
+  }
+});
+
+// Format date and time
+function formatDate(unixTime) {
+  // If timestamp is too small, assume it's in seconds → convert to ms
+  const ms = unixTime < 1e12 ? unixTime * 1000 : unixTime;
+  const date = new Date(ms);
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+
+const getGoogleNews = async (symbol) => {
+  try {
+    const results = await yahooFinance.search(symbol)
+
+    const articles = (results.news || []).map(article => ({
+      symbol: symbol,
+      title: article.title,
+      link: article.link,
+      pubDate: formatDate(article.providerPublishTime),
+      summary: article.summary || "",
+      source: article.provider?.[0]?.name || "Yahoo Finance",
+
+    }))
+      .sort((a, b) => b.pubDate - a.pubDate)
+      .slice(0, 3)
+
+    console.log(articles)
+    return articles
+  } catch (error) {
+    console.error("❌ Error fetching news:", error.message);
+    return [];
+  }
+};
+
+//Load Digital products
+async function getStockPrice(symbol) {
+  try {
+    const quote = await yahooFinance.quote(symbol);
+    return {
+      symbol: quote.symbol,
+      price: quote.regularMarketPrice,
+      currency: quote.currency,
+      change: quote.regularMarketChangePercent
+    };
+  } catch (error) {
+    return error.message;
+  }
+}
+
+// AI Advise
+app.post("/ai_advise", async (req, res) => {
+  try {
+    const { user } = req.body;
+
+    // ✅ Check if advice was already given in the last 24 hours
+    const [latestAdvice] = await sql`
+      SELECT advice, created_at 
+      FROM advice_logs 
+      WHERE "user" = ${user}
+      ORDER BY created_at DESC 
+      LIMIT 1
+    `;
+
+    if (latestAdvice && new Date() - new Date(latestAdvice.created_at) < 24 * 60 * 60 * 1000) {
+      return res.json({
+        response: latestAdvice.advice,
+        message: "Advice already generated within the last 24 hours",
+      });
+    }
+
+    const stocks = [];
+    const news = [];
+
+    // Get stocks for user
+    const stockResults = await sql`
+      SELECT "Symbol", "shares", "buyPrice" 
+      FROM stocks 
+      WHERE "user" = ${user}
+    `;
+
+    for (let i = 0; i < stockResults.length; i++) {
+      const stock = stockResults[i];
+      const quotes = await getStockPrice(stock.Symbol);
+
+      stocks.push({
+        symbol: stock.Symbol,
+        shares: stock.shares,
+        buyPrice: stock.buyPrice,
+        quotes,
+      });
+
+      // Get news for each stock
+      const stockNews = await getGoogleNews(stock.Symbol);
+      news.push(stockNews);
+    }
+
+    // Get risk assessment
+    const riskResults = await sql`
+      SELECT * 
+      FROM risk 
+      WHERE "username" = ${user}
+    `;
+
+    // Prepare AI prompt
+    const prompt = `
+      You are an expert crypto trading advisor. Analyze the following trader profile
+      and market factors to provide actionable strategies (entry, exit, risk management):
+
+      Trader Info:
+      - Risk Assessment: ${JSON.stringify(riskResults)}
+      - Market Sentiment: ${JSON.stringify(news)}
+      - Portfolio: ${JSON.stringify(stocks)}
+
+      Provide:
+      1. Entry & exit strategy (specify price target or % changes)
+      2. Risk management (stop loss, take profit levels)
+      3. Diversification tips
+      4. Market outlook (bullish/bearish/neutral)
+      5. Necessary adjustment I should make in my portfolio (actual values e.g shares and buyPrice for each investment).
+      6. Short actionable plan (3 steps users should take next)
+
+      Be concise but practical.
+      No Disclaimer.
+    `;
+
+    const response = await AI(prompt);
+
+    await sql`
+      INSERT INTO advice_logs ("user", advice)
+      VALUES (${user}, ${response})
+    `;
+
+    console.log(response)
+    res.json({ response, message: "New advice generated" });
+  } catch (err) {
+    console.error("❌ Error in /ai_advise:", err.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+
+// News API
+app.post("/news", async (req, res) => {
+  try {
+    const { user } = req.body;
+
+    // Get all stock symbols for this user
+    const results = await sql`SELECT "Symbol" FROM stocks WHERE "user" = ${user}`;
+
+    // Fetch news for all symbols in parallel
+    const news = await Promise.all(
+      results.map(async (row) => await getGoogleNews(row.Symbol))
+    );
+
+    // Flatten the array so frontend gets one unified list of articles
+    const flatNews = news.flat();
+
+    res.status(200).json({ results: flatNews });
+  } catch (err) {
+    console.error("❌ Error in /news:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+
+//Email API
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: EMAIL_USER,
+    pass: EMAIL_PASSWORD
+  }
+});
+
+app.post('/send-email', async (req, res) => {
+  const { from, message } = req.body;
+  try {
+    await transporter.sendMail({
+      from: from,
+      to: 'vincentmahia123@gmail.com',
+      subject: `Vinvest Customer: ${from}`,
+      text: message
+    }, (err, info) => {
+      if (err) throw err;
+    });
+    res.status(200).json({ message: 'Email Sent successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Email failed to send.' });
+  }
+});
+
+// Risk Assessment
+app.post("/risk", async (req, res) => {
+  try {
+    const { user, response } = req.body;
+
+    // Check if a record exists for this user
+    const existing = await sql`
+      SELECT * FROM risk WHERE "username" = ${user}
+    `;
+
+    if (existing.length > 0) {
+      // Update existing record
+      await sql`
+        UPDATE risk
+        SET age = ${response.age},
+            "investmentGoal" = ${response.investmentGoal},
+            "investmentTime" = ${response.investmentTime},
+            "reactionToMarket" = ${response.reactionToMarket},
+            "netWorth" = ${response.netWorth},
+            "fundAccess" = ${response.fundAccess},
+            "economicOutlook" = ${response.economicOutlook},
+            "financialSituation" = ${response.financialSituation},
+            "financialObligation" = ${response.financialObligation}
+        WHERE "username" = ${user}
+      `;
+      res.json({ success: "Updated successfully!" });
+    } else {
+      // Insert new record
+      await sql`
+        INSERT INTO risk (
+          age, "investmentgoal", "investmenttime", "reactiontomarket", "networth",
+          "fundaccess", "economicoutlook", "financialsituation", "financialobligation", "username"
+        )
+        VALUES (
+          ${response.age}, ${response.investmentGoal}, ${response.investmentTime},
+          ${response.reactionToMarket}, ${response.netWorth}, ${response.fundAccess},
+          ${response.economicOutlook}, ${response.financialSituation}, ${response.financialObligation}, ${user}
+        )
+      `;
+      res.json({ success: "Added successfully!" });
+    }
+  } catch (err) {
+    console.error("❌ Error in /risk:", err.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+
+app.post("/risk-updated", async (req, res) => {
+  try {
+    const { user } = req.body;
+
+    // Query with sql template literal (Postgres-safe)
+    const results = await sql`
+      SELECT * FROM risk WHERE "username" = ${user}
+    `;
+
+    if (results.length === 0) {
+      return res.json({ risk: true }); // no record → needs update
+    } else {
+      return res.json({ risk: false }); // record exists → already updated
+    }
+  } catch (err) {
+    console.error("Error checking risk:", err);
+    return res.status(500).json({ error: "Database error" });
+  }
+});
+
+//Logout endpoint
+app.post("/logout", async (req, res) => {
+  try {
+    const { user } = req.body;
+
+    // Delete user, stocks, and custom entries in sequence
+    await sql`DELETE FROM users WHERE email = ${user}`;
+    await sql`DELETE FROM stocks WHERE "user" = ${user}`;
+
+    return res.status(200).json({ message: "Logged out successfully" });
+  } catch (err) {
+    console.error("Logout error:", err);
+    return res.status(500).json({ error: "Database error during logout" });
+  }
+});
+
+
+app.listen(PORT, () => {
+  console.log(`Node server running on http://localhost:${PORT}`);
+});
+
+
+// // exports.api = functions.https.onRequest(app)
