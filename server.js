@@ -5,7 +5,7 @@ const cors = require('cors');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const yahooFinance = require('yahoo-finance2').default;
 const nodemailer = require('nodemailer');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 
 require('dotenv').config()
@@ -605,3 +605,4 @@ app.post("/logout", async (req, res) => {
     return res.status(500).json({ error: "Database error during logout" });
   }
 });
+
