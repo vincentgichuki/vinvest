@@ -606,3 +606,6 @@ app.post("/logout", async (req, res) => {
   }
 });
 
+app.listen(PORT, () => {
+  console.log(`Node server running on: ${PORT}`);
+});
