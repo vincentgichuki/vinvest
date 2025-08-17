@@ -16,7 +16,7 @@ const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
 const PORT = process.env.PORT
 
-app.use(cors({ origin: ['http://localhost:5173', 'https://ai-store-29ac6.web.app'] }));
+app.use(cors({ origin: [*] }));
 app.use(express.json());
 
 // DB connection
@@ -662,5 +662,7 @@ app.post("/logout", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on: ${PORT}`);
+  console.log("Server running on: ${PORT}");
+
 });
+
