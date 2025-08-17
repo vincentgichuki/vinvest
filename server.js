@@ -611,7 +611,7 @@ app.post('/porfolio-history', async (req, res) => {
 })
 
 //Portfolio history
-cron.schedule("0 */8 * * *", async () => {
+cron.schedule("0 */2 * * *", async () => {
   try {
     //Get all distinct users
 
@@ -665,6 +665,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
