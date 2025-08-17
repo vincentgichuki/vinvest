@@ -652,7 +652,7 @@ app.post("/logout", async (req, res) => {
     await sql`DELETE FROM stocks WHERE "user" = ${user}`;
     await sql`DELETE FROM risk WHERE "user" = ${user}`;
     await sql`DELETE FROM advice_logs WHERE "user" = ${user}`;
-    await sql`DELETE FROM portfolio_history WHERE "user" = ${user};
+    await sql`DELETE FROM portfolio_history WHERE "user" = ${user}`;
 
     return res.status(200).json({ message: "Logged out successfully" });
   } catch (err) {
@@ -665,5 +665,6 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
