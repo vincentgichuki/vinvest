@@ -1,12 +1,12 @@
 // index.js (Node.js version of the FastAPI logic)
-const { neon } = require('@neondatabase/serverless')
+const { neon } = require('@neondatabase/serverless');
 const express = require('express');
 const cors = require('cors');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const yahooFinance = require('yahoo-finance2').default;
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
-const cron = require('node-cron')
+const cron = require('node-cron');
 
 
 require('dotenv').config()
@@ -662,6 +662,5 @@ app.post("/logout", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Node server running on: ${PORT}`);
+  console.log(`Server running on: ${PORT}`);
 });
-
