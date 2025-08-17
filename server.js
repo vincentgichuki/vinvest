@@ -6,6 +6,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const yahooFinance = require('yahoo-finance2').default;
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
+const cron = require('node-cron')
 
 
 require('dotenv').config()
@@ -414,12 +415,20 @@ app.post("/ai_advise", async (req, res) => {
     for (let i = 0; i < stockResults.length; i++) {
       const stock = stockResults[i];
       const quotes = await getStockPrice(stock.Symbol);
+      const chart = await yahooFinance.chart(stock.Symbol, {
+        period1,
+        period2,       // last 7 days
+        interval: "1d",    // daily candles
+      });
+
+      const sparkline = chart.quotes.map((q) => q.close)
 
       stocks.push({
         symbol: stock.Symbol,
         shares: stock.shares,
         buyPrice: stock.buyPrice,
         quotes,
+        sparkline: sparkline
       });
 
       // Get news for each stock
@@ -590,6 +599,49 @@ app.post("/risk-updated", async (req, res) => {
   }
 });
 
+app.post('/porfolio-history', async (req, res) => {
+  try {
+    const { user } = req.body;
+    const history = await sql`SELECT * FROM portfolio_history WHERE 'user' = ${user} ORDER BY timestamp ASC`
+    res.json(history)
+  } catch (error) {
+    console.error("❌ Error fetching portfolio history:", err.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+})
+
+//Portfolio history
+cron.schedule("0 */8 * * *", async () => {
+  try {
+    //Get all distinct users
+
+    const users = await sql`SELECT DISTINCT "user" FROM stocks`
+
+    for (const row of users) {
+      const user = row.user;
+
+      //Fetch users stocks
+      const results = await sql`SELECT * FROM stocks WHERE "user" = ${user}`
+      let totalPortfolioValue = 0
+
+      for (let i = 0; i < results.length; i++) {
+        const quoteData = await yahooFinance.quote(results[i].Symbol)
+        const currentPrice = quoteData.regularMarketPrice;
+        const totalValue = currentPrice * results[i].shares;
+        totalPortfolioValue += totalValue
+      }
+
+      //store in DB
+      await sql`INSERT INTO portfolio_history (user, total_value) VALUES(${user}, ${totalPortfolioValue})`
+
+      //Delete data older than 7days
+      await sql`DELETE FROM portfolio_history WHERE timestamp < NOW() - INTERVAL '7 days`
+    }
+  } catch (error) {
+    console.error("❌ Error capturing portfolio history:", err.message);
+  }
+})
+
 //Logout endpoint
 app.post("/logout", async (req, res) => {
   try {
@@ -598,6 +650,9 @@ app.post("/logout", async (req, res) => {
     // Delete user, stocks, and custom entries in sequence
     await sql`DELETE FROM users WHERE email = ${user}`;
     await sql`DELETE FROM stocks WHERE "user" = ${user}`;
+    await sql`DELETE FROM risk WHERE "user" = ${user}`;
+    await sql`DELETE FROM advice_logs WHERE "user" = ${user}`;
+    await sql`DELETE FROM portfolio_history WHERE "user" = ${user};
 
     return res.status(200).json({ message: "Logged out successfully" });
   } catch (err) {
@@ -609,3 +664,4 @@ app.post("/logout", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Node server running on: ${PORT}`);
 });
+
