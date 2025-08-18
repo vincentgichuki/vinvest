@@ -415,12 +415,14 @@ app.post("/ai_advise", async (req, res) => {
     for (let i = 0; i < stockResults.length; i++) {
       const stock = stockResults[i];
       const quotes = await getStockPrice(stock.Symbol);
+      const period2 = new Date(); // today
+      const period1 = new Date();
+      period1.setDate(period1.getDate() - 7); // 7 days ago
       const chart = await yahooFinance.chart(stock.Symbol, {
         period1,
         period2,       // last 7 days
-        interval: "1d",    // daily candles
+        interval: "1h",    // daily candles
       });
-
       const sparkline = chart.quotes.map((q) => q.close)
 
       stocks.push({
@@ -476,10 +478,9 @@ app.post("/ai_advise", async (req, res) => {
     res.json({ response, message: "New advice generated" });
   } catch (err) {
     console.error("❌ Error in /ai_advise:", err.message);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.json({ error: `${err.message}` });
   }
 });
-
 
 // News API
 app.post("/news", async (req, res) => {
@@ -648,11 +649,11 @@ app.post("/logout", async (req, res) => {
     const { user } = req.body;
 
     // Delete user, stocks, and custom entries in sequence
-    await sql`DELETE FROM users WHERE email = ${user}`;
     await sql`DELETE FROM stocks WHERE "user" = ${user}`;
-    await sql`DELETE FROM risk WHERE "user" = ${user}`;
+    await sql`DELETE FROM risk WHERE "username" = ${user}`;
     await sql`DELETE FROM advice_logs WHERE "user" = ${user}`;
-    await sql`DELETE FROM portfolio_history WHERE "user" = ${user}`;
+    await sql`DELETE FROM portfolio_history WHERE "user" = ${user}`
+    await sql`DELETE FROM users WHERE email = ${user}`;
 
     return res.status(200).json({ message: "Logged out successfully" });
   } catch (err) {
@@ -665,6 +666,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
