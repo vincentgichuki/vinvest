@@ -398,7 +398,7 @@ app.post("/ai_advise", async (req, res) => {
     if (latestAdvice && new Date() - new Date(latestAdvice.created_at) < 24 * 60 * 60 * 1000) {
       return res.json({
         response: latestAdvice.advice,
-        message: "Advice already generated within the last 24 hours",
+        message: "Advice already generated. Wait for 24h to generate a new one.",
       });
     }
 
@@ -612,7 +612,7 @@ app.post('/porfolio-history', async (req, res) => {
 })
 
 //Portfolio history
-cron.schedule("0 */2 * * *", async () => {
+cron.schedule("0 */1 * * *", async () => {
   try {
     //Get all distinct users
 
@@ -666,6 +666,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
