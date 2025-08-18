@@ -448,21 +448,36 @@ app.post("/ai_advise", async (req, res) => {
     // Prepare AI prompt
     const prompt = `
       You are an expert crypto trading advisor. Analyze the following trader profile
-      and market factors to provide actionable strategies (entry, exit, risk management):
-
+      and market factors to provide actionable strategies (entry, exit, risk management).
+      
+      Format response as structured sections with clear titles. 
+      Use this format:
+      
+      ### Entry & Exit Strategy
+      (content here)
+      
+      ### Risk Management
+      (content here)
+      
+      ### Diversification Tips
+      (content here)
+      
+      ### Market Outlook
+      (content here)
+      
+      ### Portfolio Adjustments
+      (content here)
+      
+      ### Action Plan
+      1. Step one
+      2. Step two
+      3. Step three
+      
       Trader Info:
       - Risk Assessment: ${JSON.stringify(riskResults)}
       - Market Sentiment: ${JSON.stringify(news)}
       - Portfolio: ${JSON.stringify(stocks)}
-
-      Provide:
-      1. Entry & exit strategy (specify price target or % changes)
-      2. Risk management (stop loss, take profit levels)
-      3. Diversification tips
-      4. Market outlook (bullish/bearish/neutral)
-      5. Necessary adjustment I should make in my portfolio (actual values e.g shares and buyPrice for each investment).
-      6. Short actionable plan (3 steps users should take next)
-
+      
       Be concise but practical.
       No Disclaimer.
     `;
@@ -666,6 +681,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
