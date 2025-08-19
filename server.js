@@ -7,7 +7,7 @@ const yahooFinance = require('yahoo-finance2').default;
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
 const cron = require('node-cron');
-const { RSI } = require("technicalindicator");
+const { RSI } = require("technicalindicators");
 
 
 require('dotenv').config()
@@ -714,6 +714,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
