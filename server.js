@@ -70,10 +70,10 @@ app.post("/login", async (req, res) => {
     const isPasswordValid = await bcrypt.compare(loginPassword, user.password);
     if (!isPasswordValid) {
       return res.status(400).json({ error: "Invalid email or password" });
-    }
-
-    res.status(200).json({ message: "✅ Login successful", user: { id: user.id, username: user.username, email: user.email } });
+    } else{
+      res.status(200).json({ message: "✅ Login successful", user: { id: user.id, username: user.username, email: user.email } });
     console.log("✅ Login successful", { id: user.id, username: user.username, email: user.email })
+    }
     }
   } catch (err) {
     console.error("❌ Login error:", err.message);
@@ -713,6 +713,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
