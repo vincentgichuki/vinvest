@@ -37,15 +37,14 @@ app.post("/register", async (req, res) => {
 
     if (existing.length > 0) {
       return res.status(400).json({ error: "User already exists. Please login." });
-    }
-
-    // Insert new user
-    await sql`
+    } else{
+      await sql`
       INSERT INTO users (username, email, password)
       VALUES (${username}, ${email}, ${hashedPassword})
     `;
 
     res.status(201).json({ message: "✅ Registered successfully" });
+    }
 
   } catch (err) {
     console.error("❌ Register error:", err.message);
@@ -64,9 +63,8 @@ app.post("/login", async (req, res) => {
 
     if (result.length === 0) {
       return res.status(400).json({ error: "Invalid email or password" });
-    }
-
-    const user = result[0];
+    } else{
+       const user = result[0];
 
     // Compare password
     const isPasswordValid = await bcrypt.compare(loginPassword, user.password);
@@ -76,6 +74,7 @@ app.post("/login", async (req, res) => {
 
     res.status(200).json({ message: "✅ Login successful", user: { id: user.id, username: user.username, email: user.email } });
     console.log("✅ Login successful", { id: user.id, username: user.username, email: user.email })
+    }
   } catch (err) {
     console.error("❌ Login error:", err.message);
     res.status(500).json({ message: "Internal Server Error" });
@@ -714,6 +713,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
