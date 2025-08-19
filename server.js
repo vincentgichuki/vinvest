@@ -36,7 +36,7 @@ app.post("/register", async (req, res) => {
     `;
 
     if (existing.length > 0) {
-      return res.status(400).json({ error: "User already exists" });
+      return res.status(400).json({ error: "User already exists. Please login." });
     }
 
     // Insert new user
@@ -714,6 +714,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
