@@ -7,6 +7,7 @@ const yahooFinance = require('yahoo-finance2').default;
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
 const cron = require('node-cron');
+const {RSI} = require("technicalindicator);
 
 
 require('dotenv').config()
@@ -100,6 +101,34 @@ app.post("/username", async (req, res) => {
   }
 });
 
+async function getRSI(symbol) {
+  try {
+    // Get historical data (last 30 days, daily)
+    const period1 = new Date();
+    period1.setDate(period1.getDate() - 30);
+
+    const results = await yahooFinance.chart(symbol, {
+      period1,
+      interval: "1d",
+    });
+
+    // Extract closing prices
+    const closes = results.quotes.map(q => q.close);
+
+    // Calculate RSI (14 periods by default)
+    const rsiValues = RSI.calculate({ values: closes, period: 14 });
+
+    // Last RSI value (most recent)
+    const latestRSI = rsiValues[rsiValues.length - 1];
+
+    console.log(`RSI for ${symbol}:`, latestRSI);
+    return latestRSI;
+  } catch (err) {
+    console.error("Error fetching RSI:", err);
+  }
+}
+
+
 
 //Add digital products
 app.post("/add_stock", async (req, res) => {
@@ -186,6 +215,7 @@ app.post("/stocks", async (req, res) => {
       });
 
       const sparkline = chart.quotes.map((q) => q.close)
+      const rsi = await getRSI(symbol)
 
       stock.push({
         name: name,
@@ -199,6 +229,7 @@ app.post("/stocks", async (req, res) => {
         currency: currency,
         priceChange: priceChange,
         sparkline: sparkline,
+        rsi: rsi,
       });
     }
 
@@ -424,13 +455,15 @@ app.post("/ai_advise", async (req, res) => {
         interval: "1h",    // daily candles
       });
       const sparkline = chart.quotes.map((q) => q.close)
+      const rsi = await getRSI(stock.Symbol)
 
       stocks.push({
         symbol: stock.Symbol,
         shares: stock.shares,
         buyPrice: stock.buyPrice,
         quotes,
-        sparkline: sparkline
+        sparkline: sparkline,
+        rsi: rsi
       });
 
       // Get news for each stock
@@ -681,6 +714,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
