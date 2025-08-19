@@ -62,7 +62,7 @@ app.post("/login", async (req, res) => {
     `;
 
     if (result.length === 0) {
-      return res.status(400).json({ message: "Invalid email or password" });
+      return res.status(400).json({ error: "Invalid email or password" });
     }
 
     const user = result[0];
@@ -70,7 +70,7 @@ app.post("/login", async (req, res) => {
     // Compare password
     const isPasswordValid = await bcrypt.compare(loginPassword, user.password);
     if (!isPasswordValid) {
-      return res.status(400).json({ message: "Invalid email or password" });
+      return res.status(400).json({ error: "Invalid email or password" });
     }
 
     res.status(200).json({ message: "✅ Login successful", user: { id: user.id, username: user.username, email: user.email } });
@@ -681,6 +681,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
