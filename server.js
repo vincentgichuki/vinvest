@@ -8,6 +8,7 @@ const nodemailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
 const cron = require('node-cron');
 const { RSI } = require("technicalindicators");
+const jwt = require('jsonwebtoken')
 
 
 require('dotenv').config()
@@ -16,6 +17,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
 const PORT = process.env.PORT
+const JWT_SECRET = process.env.JWT_SECRET
 
 app.use(cors());
 app.use(express.json());
@@ -38,12 +40,18 @@ app.post("/register", async (req, res) => {
     if (existing.length > 0) {
       return res.status(400).json({ error: "User already exists. Please login." });
     } else{
-      await sql`
+     const newUser = await sql`
       INSERT INTO users (username, email, password)
       VALUES (${username}, ${email}, ${hashedPassword})
     `;
 
-    res.status(201).json({ message: "✅ Registered successfully" });
+      const user = newUser[0];
+      const token = jwt.sign({
+         { id: user.id, email: user.email },
+        JWT_SECRET,
+      })
+
+    res.status(201).json({ message: "✅ Registered successfully" , token});
     }
 
   } catch (err) {
@@ -713,6 +721,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
