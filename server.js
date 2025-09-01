@@ -45,7 +45,7 @@ app.use(express.json());
 // DB connection
 const sql = neon(process.env.DATABASE_URL)
 
-app.post("/register",  verifyFirebaseToken, async (req, res) => {
+app.post("/register", verifyFirebaseToken, async (req, res) => {
   try {
    const { userId, username, email } = req.body;
 
@@ -61,14 +61,8 @@ app.post("/register",  verifyFirebaseToken, async (req, res) => {
       INSERT INTO users (username, email, password)
       VALUES (${username}, ${email}, ${userId})
     `;
-
       const user = newUser[0];
-      const token = jwt.sign(
-         { id: user.id, email: user.email },
-         JWT_SECRET,
-      )
-
-    res.status(201).json({ message: "✅ Registered successfully" , token});
+    res.status(201).json({ message: "✅ Registered successfully"});
     }
 
   } catch (err) {
@@ -77,7 +71,7 @@ app.post("/register",  verifyFirebaseToken, async (req, res) => {
   }
 });
 
-app.post("/login",   verifyFirebaseToken, async (req, res) => {
+app.post("/login", verifyFirebaseToken, async (req, res) => {
   try {
     const { loginEmail, userId } = req.body;
 
@@ -729,6 +723,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
