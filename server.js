@@ -701,7 +701,7 @@ cron.schedule("0 */1 * * *", async () => {
       //Delete data older than 7days
       await sql`DELETE FROM portfolio_history WHERE timestamp < NOW() - INTERVAL '7 days`
     }
-  } catch (error) {
+  } catch (err) {
     console.error("❌ Error capturing portfolio history:", err.message);
   }
 })
@@ -729,6 +729,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
