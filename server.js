@@ -53,21 +53,12 @@ app.post("/register", async (req, res) => {
     if (decodedToken.email !== email) {
       return res.status(401).json({ error: "Invalid token for this email" });
     }
-
-    // Check if user already exists
-    const existing = await sql`
-      SELECT * FROM users WHERE email = ${email}
-    `;
-    if (existing.length > 0) {
-      return res.status(400).json({ error: "User already exists. Please login." });
-    } else{
      const newUser = await sql`
       INSERT INTO users (username, email, password)
       VALUES (${username}, ${email}, ${userId})
     `;
       const user = newUser[0];
     res.status(201).json({ message: "✅ Registered successfully"});
-    }
 
   } catch (err) {
     console.error("❌ Register error:", err.message);
@@ -81,20 +72,10 @@ app.post("/login", async (req, res) => {
     
     // 1. Verify Firebase ID token
     const decodedToken = await admin.auth().verifyIdToken(token);
-    if (decodedToken.email !== email) {
+    if (decodedToken.email !== loginEmail) {
       return res.status(401).json({ error: "Invalid login credentials" });
     }
-    
-    // Fetch user by email
-    const result = await sql`
-      SELECT * FROM users WHERE email = ${loginEmail}
-    `;
-
-    if (result.length === 0) {
-      return res.status(400).json({ error: "Invalid email or password" });
-    } else{
       res.status(200).json({ message: "✅ Login successful"});
-    }
   } catch (err) {
     console.error("❌ Login error:", err.message);
     res.status(500).json({ message: "Internal Server Error" });
@@ -733,6 +714,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
