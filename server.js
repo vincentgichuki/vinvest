@@ -46,10 +46,10 @@ app.post("/register", async (req, res) => {
     `;
 
       const user = newUser[0];
-      const token = jwt.sign({
+      const token = jwt.sign(
          { id: user.id, email: user.email },
         JWT_SECRET,
-      })
+      )
 
     res.status(201).json({ message: "✅ Registered successfully" , token});
     }
@@ -721,6 +721,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
