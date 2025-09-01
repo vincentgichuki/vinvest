@@ -9,6 +9,8 @@ const bcrypt = require('bcryptjs');
 const cron = require('node-cron');
 const { RSI } = require("technicalindicators");
 const jwt = require('jsonwebtoken')
+const admin = require("firebase-admin");
+const serviceAccount = require("./serviceAccountKey.json");
 
 
 require('dotenv').config()
@@ -18,6 +20,24 @@ const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASSWORD = process.env.EMAIL_PASSWORD;
 const PORT = process.env.PORT
 const JWT_SECRET = process.env.JWT_SECRET
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
+async function verifyFirebaseToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) return res.status(401).json({ error: "No token provided" });
+
+  const token = authHeader.split(" ")[1];
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.firebaseUser = decoded; // { uid, email, name }
+    next();
+  } catch (err) {
+    console.error("❌ Firebase Token verification failed:", err.message);
+    res.status(403).json({ error: "Invalid or expired Firebase token" });
+  }
+}
 
 app.use(cors());
 app.use(express.json());
@@ -25,12 +45,9 @@ app.use(express.json());
 // DB connection
 const sql = neon(process.env.DATABASE_URL)
 
-app.post("/register", async (req, res) => {
+app.post("/register",  verifyFirebaseToken, async (req, res) => {
   try {
-    const { username, email, password } = req.body;
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+   const { userId, username, email } = req.body;
 
     // Check if user already exists
     const existing = await sql`
@@ -42,13 +59,13 @@ app.post("/register", async (req, res) => {
     } else{
      const newUser = await sql`
       INSERT INTO users (username, email, password)
-      VALUES (${username}, ${email}, ${hashedPassword})
+      VALUES (${username}, ${email}, ${userId})
     `;
 
       const user = newUser[0];
       const token = jwt.sign(
          { id: user.id, email: user.email },
-        JWT_SECRET,
+         JWT_SECRET,
       )
 
     res.status(201).json({ message: "✅ Registered successfully" , token});
@@ -60,9 +77,9 @@ app.post("/register", async (req, res) => {
   }
 });
 
-app.post("/login", async (req, res) => {
+app.post("/login",   verifyFirebaseToken, async (req, res) => {
   try {
-    const { loginEmail, loginPassword } = req.body;
+    const { loginEmail, userId } = req.body;
 
     // Fetch user by email
     const result = await sql`
@@ -72,16 +89,7 @@ app.post("/login", async (req, res) => {
     if (result.length === 0) {
       return res.status(400).json({ error: "Invalid email or password" });
     } else{
-       const user = result[0];
-
-    // Compare password
-    const isPasswordValid = await bcrypt.compare(loginPassword, user.password);
-    if (!isPasswordValid) {
-      return res.status(400).json({ error: "Invalid email or password" });
-    } else{
-      res.status(200).json({ message: "✅ Login successful", user: { id: user.id, username: user.username, email: user.email } });
-    console.log("✅ Login successful", { id: user.id, username: user.username, email: user.email })
-    }
+      res.status(200).json({ message: "✅ Login successful"});
     }
   } catch (err) {
     console.error("❌ Login error:", err.message);
@@ -721,6 +729,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
