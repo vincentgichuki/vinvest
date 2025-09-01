@@ -45,15 +45,19 @@ app.use(express.json());
 // DB connection
 const sql = neon(process.env.DATABASE_URL)
 
-app.post("/register", verifyFirebaseToken, async (req, res) => {
+app.post("/register", async (req, res) => {
   try {
-   const { userId, username, email } = req.body;
+   const { userId, username, email, token } = req.body;
+
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    if (decodedToken.email !== email) {
+      return res.status(401).json({ error: "Invalid token for this email" });
+    }
 
     // Check if user already exists
     const existing = await sql`
       SELECT * FROM users WHERE email = ${email}
     `;
-
     if (existing.length > 0) {
       return res.status(400).json({ error: "User already exists. Please login." });
     } else{
@@ -71,10 +75,16 @@ app.post("/register", verifyFirebaseToken, async (req, res) => {
   }
 });
 
-app.post("/login", verifyFirebaseToken, async (req, res) => {
+app.post("/login", async (req, res) => {
   try {
-    const { loginEmail, userId } = req.body;
-
+    const { loginEmail, token} = req.body;
+    
+    // 1. Verify Firebase ID token
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    if (decodedToken.email !== email) {
+      return res.status(401).json({ error: "Invalid login credentials" });
+    }
+    
     // Fetch user by email
     const result = await sql`
       SELECT * FROM users WHERE email = ${loginEmail}
@@ -723,6 +733,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
