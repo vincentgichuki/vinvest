@@ -24,21 +24,6 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-async function verifyFirebaseToken(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  if (!authHeader) return res.status(401).json({ error: "No token provided" });
-
-  const token = authHeader.split(" ")[1];
-  try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    req.firebaseUser = decoded; // { uid, email, name }
-    next();
-  } catch (err) {
-    console.error("❌ Firebase Token verification failed:", err.message);
-    res.status(403).json({ error: "Invalid or expired Firebase token" });
-  }
-}
-
 app.use(cors());
 app.use(express.json());
 
@@ -709,6 +694,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
