@@ -47,15 +47,11 @@ const sql = neon(process.env.DATABASE_URL)
 
 app.post("/register", async (req, res) => {
   try {
-   const { userId, username, email, token } = req.body;
-
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    if (decodedToken.email !== email) {
-      return res.status(401).json({ error: "Invalid token for this email" });
-    }
+   const { username, email, password } = req.body;
+    
      const newUser = await sql`
       INSERT INTO users (username, email, password)
-      VALUES (${username}, ${email}, ${userId})
+      VALUES (${username}, ${email}, ${password})
     `;
       const user = newUser[0];
     res.status(201).json({ message: "✅ Registered successfully"});
@@ -714,6 +710,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
