@@ -53,7 +53,6 @@ app.post("/register", async (req, res) => {
       INSERT INTO users (username, email, password)
       VALUES (${username}, ${email}, ${password})
     `;
-      const user = newUser[0];
     res.status(201).json({ message: "✅ Registered successfully"});
 
   } catch (err) {
@@ -710,6 +709,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
