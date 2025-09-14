@@ -511,7 +511,7 @@ app.post("/ai_advise", async (req, res) => {
 });
 
 //Calculate the risk level
-app.post("/risk", async (req, res) =>{
+app.post("/calculate_risk", async (req, res) =>{
   const {user} = req.body;
   const stocks = [];
   const news = [];
@@ -755,6 +755,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
