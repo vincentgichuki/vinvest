@@ -510,6 +510,67 @@ app.post("/ai_advise", async (req, res) => {
   }
 });
 
+//Calculate the risk level
+app.post("/risk", async (req, res) =>{
+  const {user} = req.body;
+  const stocks = [];
+  const news = [];
+
+  // Get stocks for user
+    const stockResults = await sql`
+      SELECT "Symbol", "shares", "buyPrice" 
+      FROM stocks 
+      WHERE "user" = ${user}
+    `;
+
+    for (let i = 0; i < stockResults.length; i++) {
+      const stock = stockResults[i];
+      const quotes = await getStockPrice(stock.Symbol);
+      const period2 = new Date(); // today
+      const period1 = new Date();
+      period1.setDate(period1.getDate() - 7); // 7 days ago
+      const chart = await yahooFinance.chart(stock.Symbol, {
+        period1,
+        period2,       // last 7 days
+        interval: "1h",    // daily candles
+      });
+      const sparkline = chart.quotes.map((q) => q.close)
+      const rsi = await getRSI(stock.Symbol)
+
+      stocks.push({
+        symbol: stock.Symbol,
+        shares: stock.shares,
+        buyPrice: stock.buyPrice,
+        quotes,
+        sparkline: sparkline,
+        rsi: rsi
+      });
+
+       // Get news for each stock
+      const stockNews = await getGoogleNews(stock.Symbol);
+      news.push(stockNews);
+    }
+
+    const riskResults = await sql`
+      SELECT * 
+      FROM risk 
+      WHERE "username" = ${user}
+    `;
+
+  //Prompt 
+  const prompt = `
+  To your best knowledge, based the following resources i want you to calculte my risk level in my tradings:
+  1. Stocks selected: ${JSON.stringify(stocks)}
+  2. News related to stocks: ${JSON.stringify(news)}
+  3. My risk assessment form: ${JSON.stringify(riskResults)}
+
+  Note: the only answer allowed to be given is an integer in pereentage form e.g 53 without the percentage sign. Also it should be a whole number with no decimals.
+  `
+
+  const response = await AI(prompt);
+  return res.json({response})
+})
+
 // News API
 app.post("/news", async (req, res) => {
   try {
@@ -694,6 +755,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
