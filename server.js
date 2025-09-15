@@ -713,11 +713,10 @@ cron.schedule("0 * * * *", async () => { // once per minute
 
       const stockValues = await Promise.all(results.map(async (stock) => {
         const quoteData = await yahooFinance.quote(stock.Symbol);
-        return quoteData.regularMarketPrice * stock.shares;
-        console.log(quoteData.regularMarketPrice)
+        return parseFloat((quoteData.regularMarketPrice * stock.shares).toFixed(6));
       }));
 
-      const totalPortfolioValue = stockValues.reduce((a, b) => a + b, 0);
+      const totalPortfolioValue = parseFloat(stockValues.reduce((a, b) => a + b, 0).toFixed(6));
 
       await sql`
         INSERT INTO portfolio_history (users, total_value)
@@ -757,6 +756,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
