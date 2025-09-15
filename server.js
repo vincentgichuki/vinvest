@@ -719,7 +719,7 @@ cron.schedule("* * * * *", async () => { // once per minute
       const totalPortfolioValue = stockValues.reduce((a, b) => a + b, 0);
 
       await sql`
-        INSERT INTO portfolio_history (user, total_value)
+        INSERT INTO portfolio_history (users, total_value)
         VALUES (${user}, ${totalPortfolioValue})
       `;
 
@@ -756,6 +756,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
