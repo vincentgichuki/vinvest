@@ -692,7 +692,7 @@ app.post("/risk-updated", async (req, res) => {
 app.post('/porfolio-history', async (req, res) => {
   try {
     const { user } = req.body;
-    const history = await sql`SELECT * FROM portfolio_history WHERE "user" = ${user} ORDER BY timestamp ASC`
+    const history = await sql`SELECT * FROM portfolio_history WHERE "users" = ${user} ORDER BY timestamp ASC`
     res.json(history)
   } catch (error) {
     console.error("❌ Error fetching portfolio history:", err.message);
@@ -756,6 +756,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
