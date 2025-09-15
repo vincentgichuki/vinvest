@@ -701,36 +701,37 @@ app.post('/porfolio-history', async (req, res) => {
 })
 
 //Portfolio history
-cron.schedule("0 */1 * * *", async () => {
+cron.schedule("* * * * *", async () => { // once per minute
+  console.log("Cron job running at", new Date().toISOString());
   try {
-    //Get all distinct users
-
-    const users = await sql`SELECT DISTINCT "user" FROM stocks`
+    const users = await sql`SELECT DISTINCT "user" FROM stocks`;
 
     for (const row of users) {
       const user = row.user;
 
-      //Fetch users stocks
-      const results = await sql`SELECT * FROM stocks WHERE "user" = ${user}`
-      let totalPortfolioValue = 0
+      const results = await sql`SELECT * FROM stocks WHERE "user" = ${user}`;
 
-      for (let i = 0; i < results.length; i++) {
-        const quoteData = await yahooFinance.quote(results[i].Symbol)
-        const currentPrice = quoteData.regularMarketPrice;
-        const totalValue = currentPrice * results[i].shares;
-        totalPortfolioValue += totalValue
-      }
+      const stockValues = await Promise.all(results.map(async (stock) => {
+        const quoteData = await yahooFinance.quote(stock.Symbol);
+        return quoteData.regularMarketPrice * stock.shares;
+      }));
 
-      //store in DB
-      await sql`INSERT INTO portfolio_history (user, total_value) VALUES(${user}, ${totalPortfolioValue})`
+      const totalPortfolioValue = stockValues.reduce((a, b) => a + b, 0);
 
-      //Delete data older than 7days
-      await sql`DELETE FROM portfolio_history WHERE timestamp < NOW() - INTERVAL '7 days`
+      await sql`
+        INSERT INTO portfolio_history (user, total_value)
+        VALUES (${user}, ${totalPortfolioValue})
+      `;
+
+      await sql`
+        DELETE FROM portfolio_history
+        WHERE timestamp < NOW() - INTERVAL '7 days'
+      `;
     }
   } catch (err) {
-    console.error("❌ Error capturing portfolio history:", err.message);
+    console.error("❌ Error capturing portfolio history:", err);
   }
-})
+});
 
 //Logout endpoint
 app.post("/logout", async (req, res) => {
@@ -755,6 +756,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
