@@ -701,7 +701,7 @@ app.post('/porfolio-history', async (req, res) => {
 })
 
 //Portfolio history
-cron.schedule("* * * * *", async () => { // once per minute
+cron.schedule("0 * * * *", async () => { // once per minute
   console.log("Cron job running at", new Date().toISOString());
   try {
     const users = await sql`SELECT DISTINCT "user" FROM stocks`;
@@ -756,6 +756,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
