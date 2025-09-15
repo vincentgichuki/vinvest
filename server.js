@@ -714,6 +714,7 @@ cron.schedule("0 * * * *", async () => { // once per minute
       const stockValues = await Promise.all(results.map(async (stock) => {
         const quoteData = await yahooFinance.quote(stock.Symbol);
         return quoteData.regularMarketPrice * stock.shares;
+        console.log(quoteData.regularMarketPrice)
       }));
 
       const totalPortfolioValue = stockValues.reduce((a, b) => a + b, 0);
@@ -756,6 +757,7 @@ app.listen(PORT, () => {
   console.log("Server running on: ${PORT}");
 
 });
+
 
 
 
